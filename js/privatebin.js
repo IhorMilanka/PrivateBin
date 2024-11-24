@@ -2092,7 +2092,7 @@ jQuery.PrivateBin = (function($, RawDeflate) {
         {
             I18n._(
                 $('#pastelink'),
-                'Your paste is <a id="pasteurl" href="%s">%s</a> <span id="copyhint">(Hit [Ctrl]+[c] to copy)</span>',
+                'Your paste is <a id="pasteurl" href="%s">%s</a> <span id="copyhint">(Hit <kbd>Ctrl</kbd>+<kbd>c</kbd> to copy)</span>',
                 url, url
             );
             // save newly created element
@@ -2257,7 +2257,11 @@ jQuery.PrivateBin = (function($, RawDeflate) {
             password = $passwordDecrypt.val();
 
             // hide modal
-            $passwordModal.modal('hide');
+            if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip.VERSION) {
+                (new bootstrap.Modal($passwordModal[0])).hide();
+            } else {
+                $passwordModal.modal('hide');
+            }
 
             PasteDecrypter.run();
         }
@@ -2278,7 +2282,11 @@ jQuery.PrivateBin = (function($, RawDeflate) {
                 const $loadconfirmClose = $loadconfirmmodal.find('.close');
                 $loadconfirmClose.off('click.close');
                 $loadconfirmClose.on('click.close', Controller.newPaste);
-                $loadconfirmmodal.modal('show');
+                if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip.VERSION) {
+                    (new bootstrap.Modal($loadconfirmmodal[0])).show();
+                } else {
+                    $loadconfirmmodal.modal('show');
+                }
             } else {
                 if (window.confirm(
                     I18n._('This secret message can only be displayed once. Would you like to see it now?')
@@ -2300,11 +2308,18 @@ jQuery.PrivateBin = (function($, RawDeflate) {
         {
             // show new bootstrap method (if available)
             if ($passwordModal.length !== 0) {
-                $passwordModal.modal({
-                    backdrop: 'static',
-                    keyboard: false
-                });
-                $passwordModal.modal('show');
+                if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip.VERSION) {
+                    (new bootstrap.Modal($passwordModal[0]), {
+                        backdrop: 'static',
+                        keyboard: false
+                    }).show();
+                } else {
+                    $passwordModal.modal({
+                        backdrop: 'static',
+                        keyboard: false
+                    });
+                    $passwordModal.modal('show');
+                }
                 // focus password input
                 $passwordDecrypt.focus();
                 // then re-focus it, when modal causes it to loose focus again
@@ -2393,8 +2408,11 @@ jQuery.PrivateBin = (function($, RawDeflate) {
             $messageEditParent,
             $messagePreview,
             $messagePreviewParent,
+            $messageTab,
+            $messageTabParent,
             $message,
-            isPreview = false;
+            isPreview = false,
+            isTabSupported = true;
 
         /**
          * support input of tab character
@@ -2406,9 +2424,14 @@ jQuery.PrivateBin = (function($, RawDeflate) {
          */
         function supportTabs(event)
         {
-            const keyCode = event.keyCode || event.which;
+            // support disabling tab support using [Esc] and [Ctrl]+[m]
+            if (event.key === 'Escape' || (event.ctrlKey && event.key === 'm')) {
+                toggleTabSupport();
+                $messageTab[0].checked = isTabSupported;
+                event.preventDefault();
+            }
             // tab was pressed
-            if (keyCode === 9) {
+            else if (isTabSupported && event.key === 'Tab') {
                 // get caret position & selection
                 const val   = this.value,
                       start = this.selectionStart,
@@ -2420,6 +2443,18 @@ jQuery.PrivateBin = (function($, RawDeflate) {
                 // prevent the textarea to lose focus
                 event.preventDefault();
             }
+        }
+
+        /**
+         * toggle tab support in message textarea
+         *
+         * @name   Editor.toggleTabSupport
+         * @private
+         * @function
+         */
+        function toggleTabSupport()
+        {
+            isTabSupported = !isTabSupported;
         }
 
         /**
@@ -2444,6 +2479,7 @@ jQuery.PrivateBin = (function($, RawDeflate) {
 
             // reshow input
             $message.removeClass('hidden');
+            $messageTabParent.removeClass('hidden');
 
             me.focusInput();
 
@@ -2476,6 +2512,7 @@ jQuery.PrivateBin = (function($, RawDeflate) {
 
             // hide input as now preview is shown
             $message.addClass('hidden');
+            $messageTabParent.addClass('hidden');
 
             // show preview
             PasteViewer.setText($message.val());
@@ -2534,6 +2571,7 @@ jQuery.PrivateBin = (function($, RawDeflate) {
         me.show = function()
         {
             $message.removeClass('hidden');
+            $messageTabParent.removeClass('hidden');
             $editorTabs.removeClass('hidden');
         };
 
@@ -2546,6 +2584,7 @@ jQuery.PrivateBin = (function($, RawDeflate) {
         me.hide = function()
         {
             $message.addClass('hidden');
+            $messageTabParent.addClass('hidden');
             $editorTabs.addClass('hidden');
         };
 
@@ -2585,7 +2624,7 @@ jQuery.PrivateBin = (function($, RawDeflate) {
         };
 
         /**
-         * init status manager
+         * init editor
          *
          * preloads jQuery elements
          *
@@ -2596,9 +2635,12 @@ jQuery.PrivateBin = (function($, RawDeflate) {
         {
             $editorTabs = $('#editorTabs');
             $message = $('#message');
+            $messageTab = $('#messagetab');
+            $messageTabParent = $messageTab.parent();
 
             // bind events
             $message.keydown(supportTabs);
+            $messageTab.change(toggleTabSupport);
 
             // bind click events to tab switchers (a), and save parents (li)
             $messageEdit = $('#messageedit').click(viewEditor);
@@ -2619,7 +2661,8 @@ jQuery.PrivateBin = (function($, RawDeflate) {
     const PasteViewer = (function () {
         const me = {};
 
-        let $placeholder,
+        let $messageTabParent,
+            $placeholder,
             $prettyMessage,
             $prettyPrint,
             $plainText,
@@ -2699,6 +2742,7 @@ jQuery.PrivateBin = (function($, RawDeflate) {
             }
             // otherwise hide the placeholder
             $placeholder.addClass('hidden');
+            $messageTabParent.addClass('hidden');
 
             if (format === 'markdown') {
                 $plainText.removeClass('hidden');
@@ -2837,6 +2881,7 @@ jQuery.PrivateBin = (function($, RawDeflate) {
          */
         me.init = function()
         {
+            $messageTabParent = $('#messagetab').parent();
             $placeholder = $('#placeholder');
             $plainText = $('#plaintext');
             $prettyMessage = $('#prettymessage');
@@ -3768,7 +3813,7 @@ jQuery.PrivateBin = (function($, RawDeflate) {
 
         /**
          * Clear the password input in the top navigation
-         * 
+         *
          * @name TopNav.clearPasswordInput
          * @function
          */
@@ -3941,8 +3986,8 @@ jQuery.PrivateBin = (function($, RawDeflate) {
             });
             $('#qrcode-display').html(qrCanvas);
             // only necessary for bootstrap 5, other templates won't have this
-            if (bootstrap.Tooltip.VERSION) {
-                $('#qrcodemodal').modal('show');
+            if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip.VERSION) {
+                (new bootstrap.Modal('#qrcodemodal')).show();
             }
         }
 
@@ -4035,7 +4080,11 @@ jQuery.PrivateBin = (function($, RawDeflate) {
                     $emailconfirmTimezoneCurrent.off('click.sendEmailCurrentTimezone');
                     $emailconfirmTimezoneCurrent.on('click.sendEmailCurrentTimezone', () => {
                         const emailBody = templateEmailBody(expirationDateRoundedToSecond.toLocaleString(), isBurnafterreading);
-                        $emailconfirmmodal.modal('hide');
+                        if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip.VERSION) {
+                            (new bootstrap.Modal($emailconfirmmodal[0])).hide();
+                        } else {
+                            $emailconfirmmodal.modal('hide');
+                        }
                         triggerEmailSend(emailBody);
                     });
                     $emailconfirmTimezoneUtc.off('click.sendEmailUtcTimezone');
@@ -4045,10 +4094,18 @@ jQuery.PrivateBin = (function($, RawDeflate) {
                             // we don't use Date.prototype.toUTCString() because we would like to avoid GMT
                             { timeZone: 'UTC', dateStyle: 'long', timeStyle: 'long' }
                         ), isBurnafterreading);
-                        $emailconfirmmodal.modal('hide');
+                        if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip.VERSION) {
+                            (new bootstrap.Modal($emailconfirmmodal[0])).hide();
+                        } else {
+                            $emailconfirmmodal.modal('hide');
+                        }
                         triggerEmailSend(emailBody);
                     });
-                    $emailconfirmmodal.modal('show');
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip.VERSION) {
+                        (new bootstrap.Modal($emailconfirmmodal[0])).show();
+                    } else {
+                        $emailconfirmmodal.modal('show');
+                    }
                 } else {
                     triggerEmailSend(templateEmailBody(null, isBurnafterreading));
                 }
